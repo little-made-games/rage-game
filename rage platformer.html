@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haha Gotcha! - A "Friendly" Platformer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #ffb6e6 0%, #ffd9c0 100%);
+            font-family: 'Comic Sans MS', cursive;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            border: 2px solid #000;
+            max-width: 100%;
+            max-height: 90vh;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #mainMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 40px;
+            border-radius: 10px;
+            color: white;
+        }
+        #startButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startButton:hover {
+            background: #45a049;
+        }
+        .menu-title {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #dialogueBox {
+            position: absolute;
+            bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 3px solid #ff69b4;
+            border-radius: 10px;
+            max-width: 600px;
+            display: none;
+            font-size: 18px;
+            color: #333;
+            text-align: center;
+            animation: bounce 0.5s infinite alternate;
+        }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-5px); }
+        }
+        #deathCounter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #ff69b4;
+            text-shadow: 2px 2px #fff;
+        }
+        .glitch {
+            animation: glitch 0.2s infinite;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            25% { transform: translate(2px, 2px); }
+            50% { transform: translate(-2px, -2px); }
+            75% { transform: translate(-2px, 2px); }
+            100% { transform: translate(2px, -2px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="mainMenu">
+            <h1 class="menu-title">Rage Platformer</h1>
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <script>
+        // Game setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const mainMenu = document.getElementById('mainMenu');
+        const startButton = document.getElementById('startButton');
+        
+        // Set initial canvas size
+        canvas.width = 1400;
+        canvas.height = 800;
+        
+        // Game state
+        let gameState = {
+            level: 1,
+            deaths: 0,
+            gameStarted: false,
+            currentLevel: 1,
+            checkpoint: null,
+            platforms: [],
+            traps: [],
+            checkpoints: [],
+            player: {
+                x: 50,
+                y: 700,
+                width: 30,
+                height: 30,
+                velocityX: 0,
+                velocityY: 0,
+                isJumping: false
+            }
+        };
+
+        // Game constants
+        const GAME_CONFIG = {
+            canvas: {
+                width: 1400,
+                height: 800
+            },
+            physics: {
+                gravity: 0.3,
+                jumpForce: -10,
+                moveSpeed: 5
+            },
+            colors: {
+                background: ['#ffb6e6', '#ffd9c0'],
+                player: '#ff69b4',
+                platform: ['#90ee90', '#98fb98', '#87ceeb', '#dda0dd', '#ffa07a'],
+                checkpoint: '#32cd32',
+                traps: ['#ff0000', '#ff4444']
+            },
+            levels: {
+                maxLevel: 10,
+                currentLevel: 1
+            },
+            dialogue: {
+                intro: ["Welcome to the game! Try to reach the end without dying!"],
+                death: [
+                    "You died! Deaths: ",
+                    "Another one! Deaths: ",
+                    "Keep trying! Deaths: ",
+                    "Don't give up! Deaths: ",
+                    "You can do it! Deaths: ",
+                    "Die in Real Live! Deaths: "
+                ]
+            }
+        };
+
+        // Initialize canvas
+        class Platform {
+            constructor(x, y, width, height, type = 'normal') {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.type = type;
+                this.visible = true;
+                this.timer = 0;
+                this.colorIndex = Math.floor(Math.random() * GAME_CONFIG.colors.platform.length);
+            }
+
+            checkCollision(player) {
+                return this.visible && 
+                       player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+
+            update() {
+                if (this.type === 'fake' && this.timer > 0) {
+                    this.timer--;
+                    if (this.timer === 0) {
+                        this.visible = false;
+                    }
+                }
+            }
+
+            draw() {
+                if (!this.visible) return;
+                
+                ctx.fillStyle = this.type === 'fake' ? 
+                    '#ff8c69' : 
+                    GAME_CONFIG.colors.platform[this.colorIndex];
+                
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Add cute face to platforms
+                if (this.width >= 40) {
+                    ctx.fillStyle = '#E0FFFF';
+                    // Eyes
+                    ctx.fillRect(this.x + this.width/4, this.y + this.height/3, 4, 4);
+                    ctx.fillRect(this.x + this.width*3/4, this.y + this.height/3, 4, 4);
+                    // Smile
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.width/2, this.y + this.height*2/3, this.width/8, 0, Math.PI, false);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        class Checkpoint {
+            constructor(x, y, isFake = false) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 30;
+                this.isFake = isFake;
+                this.timer = 0;
+                this.activated = false;
+            }
+
+            checkCollision(player) {
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+
+            update() {
+                this.timer++;
+                if (this.timer % 60 === 0) {
+                    this.activated = !this.activated;
+                }
+            }
+
+            draw() {
+                // Base
+                ctx.fillStyle = this.isFake ? 
+                    (this.activated ? '#ff69b4' : '#90ee90') : 
+                    GAME_CONFIG.colors.checkpoint;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Flag pole
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(this.x + 5, this.y - 20, 5, 20);
+
+                // Flag
+                ctx.fillStyle = this.isFake ? 
+                    (this.activated ? '#ff0000' : '#ffff00') : 
+                    '#ffff00';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 10, this.y - 20);
+                ctx.lineTo(this.x + 25, this.y - 15);
+                ctx.lineTo(this.x + 10, this.y - 10);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        class Trap {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+            }
+
+            checkCollision(player) {
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+
+            update() {
+                // Trap animation logic if needed
+            }
+
+            draw() {
+                // Draw red triangle spike
+                ctx.fillStyle = GAME_CONFIG.colors.traps[0];
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y + this.height);
+                ctx.lineTo(this.x + this.width/2, this.y);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // Add evil face
+                ctx.fillStyle = '#000';
+                const faceY = this.y + this.height*2/3;
+                // Evil eyes
+                ctx.fillRect(this.x + this.width/3, faceY, 3, 3);
+                ctx.fillRect(this.x + this.width*2/3, faceY, 3, 3);
+                // Evil smile
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, faceY + 5, this.width/6, 0, Math.PI, true);
+                ctx.stroke();
+            }
+        }
+
+        function generateLevel(level) {
+            gameState.platforms = [];
+            gameState.traps = [];
+            gameState.checkpoints = [];
+
+            const minX = 0;
+            const maxX = GAME_CONFIG.canvas.width - 100;
+            const baseHeight = GAME_CONFIG.canvas.height - 100;
+
+            // Always create a spawn platform
+            gameState.platforms.push(new Platform(50, baseHeight, 200, 20));
+            
+            switch(level) {
+                case 1:
+                    // Level 1 - Simple introduction
+                    gameState.platforms.push(
+                        new Platform(300, baseHeight - 50, 200, 20),
+                        new Platform(600, baseHeight - 100, 200, 20),
+                        new Platform(900, baseHeight - 150, 200, 20),
+                        new Platform(1200, baseHeight - 200, 200, 20)
+                    );
+                    gameState.checkpoints.push(new Checkpoint(1300, baseHeight - 230));
+                    break;
+
+                case 2:
+                    // Level 2 - Introduce fake platforms
+                    gameState.platforms.push(
+                        new Platform(300, baseHeight - 50, 200, 20),
+                        new Platform(600, baseHeight - 100, 200, 20, 'fake'),
+                        new Platform(900, baseHeight - 150, 200, 20),
+                        new Platform(1200, baseHeight - 200, 200, 20)
+                    );
+                    gameState.traps.push(
+                        new Trap(500, baseHeight - 50, 30, 30),
+                        new Trap(800, baseHeight - 100, 30, 30)
+                    );
+                    gameState.checkpoints.push(new Checkpoint(1300, baseHeight - 230));
+                    break;
+
+                case 3:
+                    // Level 3 - More complex jumps
+                    gameState.platforms.push(
+                        new Platform(300, baseHeight - 100, 200, 20),
+                        new Platform(600, baseHeight - 200, 200, 20),
+                        new Platform(900, baseHeight - 300, 200, 20),
+                        new Platform(600, baseHeight - 400, 200, 20),
+                        new Platform(300, baseHeight - 300, 200, 20)
+                    );
+                    gameState.traps.push(
+                        new Trap(400, baseHeight - 50, 30, 30),
+                        new Trap(700, baseHeight - 150, 30, 30),
+                        new Trap(1000, baseHeight - 250, 30, 30)
+                    );
+                    gameState.checkpoints.push(new Checkpoint(350, baseHeight - 330));
+                    break;
+
+                case 4:
+                    // Level 4 - The maze
+                    for (let i = 0; i < 5; i++) {
+                        gameState.platforms.push(
+                            new Platform(300 + (i % 2) * 600, baseHeight - (i + 1) * 80, 200, 20)
+                        );
+                        if (i < 3) {
+                            gameState.platforms.push(
+                                new Platform(400 + (i % 3) * 300, baseHeight - (i + 1) * 100, 100, 20, 'fake')
+                            );
+                        }
+                    }
+                    gameState.platforms.push(new Platform(1100, baseHeight - 450, 250, 20));
+                    
+                    for (let i = 0; i < 8; i++) {
+                        gameState.traps.push(
+                            new Trap(200 + i * 100, baseHeight - 20, 30, 30),
+                            new Trap(250 + i * 100, baseHeight - 120, 30, 30)
+                        );
+                    }
+                    gameState.checkpoints.push(
+                        new Checkpoint(400, baseHeight - 300, false),
+                        new Checkpoint(1200, baseHeight - 480, false)
+                    );
+                    break;
+
+                case 5:
+                    // Level 5 - The final challenge
+                    gameState.platforms.push(
+                        new Platform(300, baseHeight - 100, 250, 20),
+                        new Platform(700, baseHeight - 200, 250, 20),
+                        new Platform(1100, baseHeight - 300, 250, 20),
+                        new Platform(700, baseHeight - 400, 250, 20),
+                        new Platform(300, baseHeight - 500, 250, 20),
+                        new Platform(700, baseHeight - 600, 250, 20)
+                    );
+                    
+                    // Add some fake platforms
+                    gameState.platforms.push(
+                        new Platform(500, baseHeight - 150, 100, 20, 'fake'),
+                        new Platform(900, baseHeight - 250, 100, 20, 'fake'),
+                        new Platform(500, baseHeight - 350, 100, 20, 'fake')
+                    );
+                    
+                    // Add traps in a pattern
+                    for (let i = 0; i < 10; i++) {
+                        gameState.traps.push(
+                            new Trap(150 + i * 120, baseHeight - 50, 30, 30),
+                            new Trap(150 + i * 120, baseHeight - 200, 30, 30),
+                            new Trap(150 + i * 120, baseHeight - 350, 30, 30)
+                        );
+                    }
+                    
+                    gameState.checkpoints.push(
+                        new Checkpoint(1150, baseHeight - 330, false),
+                        new Checkpoint(750, baseHeight - 630, false)
+                    );
+                    break;
+            }
+        }
+
+        function resetLevel(useCheckpoint = false) {
+            if (useCheckpoint && gameState.checkpoint) {
+                gameState.player.x = gameState.checkpoint.x;
+                gameState.player.y = gameState.checkpoint.y;
+            } else {
+                // Spawn on the first platform
+                gameState.player.x = 100;
+                gameState.player.y = GAME_CONFIG.canvas.height - 150;
+            }
+            gameState.player.velocityX = 0;
+            gameState.player.velocityY = 0;
+            gameState.player.isJumping = false;
+        }
+
+        function drawPlayer() {
+            // Draw player body
+            ctx.fillStyle = GAME_CONFIG.colors.player;
+            ctx.fillRect(
+                gameState.player.x,
+                gameState.player.y,
+                gameState.player.width,
+                gameState.player.height
+            );
+
+            // Draw cute face
+            ctx.fillStyle = '#000';
+            // Eyes
+            ctx.fillRect(gameState.player.x + 7, gameState.player.y + 10, 4, 4);
+            ctx.fillRect(gameState.player.x + 19, gameState.player.y + 10, 4, 4);
+            // Smile
+            ctx.beginPath();
+            ctx.arc(gameState.player.x + 15, gameState.player.y + 20, 5, 0, Math.PI, false);
+            ctx.stroke();
+        }
+
+        function updatePlayer() {
+            // Apply gravity
+            gameState.player.velocityY += GAME_CONFIG.physics.gravity;
+            
+            // Update position based on velocity
+            gameState.player.x += gameState.player.velocityX;
+            gameState.player.y += gameState.player.velocityY;
+
+            // Check platform collisions
+            let onPlatform = false;
+            for (const platform of gameState.platforms) {
+                if (platform.checkCollision(gameState.player)) {
+                    // Top collision (landing)
+                    if (gameState.player.velocityY > 0 &&
+                        gameState.player.y + gameState.player.height - gameState.player.velocityY <= platform.y) {
+                        gameState.player.y = platform.y - gameState.player.height;
+                        gameState.player.velocityY = 0;
+                        gameState.player.isJumping = false;
+                        onPlatform = true;
+
+                        if (platform.type === 'fake') {
+                            platform.timer = 30; // Start disappearing
+                        }
+                    }
+                    // Bottom collision (hitting head)
+                    else if (gameState.player.velocityY < 0 &&
+                        gameState.player.y - gameState.player.velocityY >= platform.y + platform.height) {
+                        gameState.player.y = platform.y + platform.height;
+                        gameState.player.velocityY = 0;
+                    }
+                    // Side collisions
+                    else {
+                        if (gameState.player.x + gameState.player.width > platform.x &&
+                            gameState.player.x < platform.x) {
+                            gameState.player.x = platform.x - gameState.player.width;
+                        } else if (gameState.player.x < platform.x + platform.width &&
+                            gameState.player.x + gameState.player.width > platform.x + platform.width) {
+                            gameState.player.x = platform.x + platform.width;
+                        }
+                    }
+                }
+            }
+
+            // Check checkpoint collisions
+            for (const checkpoint of gameState.checkpoints) {
+                if (checkpoint.checkCollision(gameState.player)) {
+                    if (checkpoint.isFake) {
+                        handleDeath();
+                    } else {
+                        // Advance to next level
+                        if (gameState.currentLevel < GAME_CONFIG.levels.maxLevel) {
+                            gameState.currentLevel++;
+                            generateLevel(gameState.currentLevel);
+                            resetLevel(false);
+                        } else {
+                            showDialogue("Congratulations! You've beaten all levels!");
+                            setTimeout(() => {
+                                gameState.currentLevel = 1;
+                                generateLevel(1);
+                                resetLevel(false);
+                            }, 3000);
+                        }
+                    }
+                }
+            }
+
+            // Check trap collisions
+            for (const trap of gameState.traps) {
+                if (trap.checkCollision(gameState.player)) {
+                    handleDeath();
+                }
+            }
+
+            // Keep player in bounds
+            if (gameState.player.x < 0) {
+                gameState.player.x = 0;
+            }
+            if (gameState.player.x + gameState.player.width > GAME_CONFIG.canvas.width) {
+                gameState.player.x = GAME_CONFIG.canvas.width - gameState.player.width;
+            }
+
+            // If not on any platform, player is jumping/falling
+            if (!onPlatform) {
+                gameState.player.isJumping = true;
+            }
+
+            // Check if player fell off the bottom
+            if (gameState.player.y > GAME_CONFIG.canvas.height) {
+                handleDeath();
+            }
+        }
+
+        function handleDeath() {
+            gameState.deaths++;
+            const randomDeathMessage = GAME_CONFIG.dialogue.death[Math.floor(Math.random() * GAME_CONFIG.dialogue.death.length)];
+            showDialogue(randomDeathMessage + gameState.deaths);
+            resetLevel(true);
+        }
+
+        function showDialogue(text) {
+            // Only show dialogue for death messages
+            if (text.includes("Deaths:")) {
+                const dialogueBox = document.createElement('div');
+                dialogueBox.style.position = 'absolute';
+                dialogueBox.style.top = '50%';
+                dialogueBox.style.left = '50%';
+                dialogueBox.style.transform = 'translate(-50%, -50%)';
+                dialogueBox.style.background = 'rgba(0, 0, 0, 0.8)';
+                dialogueBox.style.color = 'white';
+                dialogueBox.style.padding = '20px';
+                dialogueBox.style.borderRadius = '10px';
+                dialogueBox.style.fontSize = '24px';
+                dialogueBox.textContent = text;
+                document.body.appendChild(dialogueBox);
+                
+                setTimeout(() => {
+                    dialogueBox.remove();
+                }, 2000);
+            }
+        }
+
+        // Start game function
+        function startGame() {
+            console.log('Starting game...'); // Debug log
+            gameState.gameStarted = true;
+            mainMenu.style.display = 'none';
+            generateLevel(1);
+            gameLoop();
+        }
+
+        // Event listener for start button
+        if (startButton) {
+            startButton.addEventListener('click', startGame);
+        } else {
+            console.error('Start button not found!'); // Debug log
+        }
+
+        // Initialize game
+        function init() {
+            console.log('Initializing game...'); // Debug log
+            // Draw initial frame with menu
+            draw();
+            // Start game loop but it won't draw game elements until game starts
+            gameLoop();
+        }
+
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', init);
+
+        function gameLoop() {
+            if (!gameState.gameStarted) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            handleInput();
+            updatePlayer();
+            gameState.platforms.forEach(p => p.update());
+            gameState.checkpoints.forEach(c => c.update());
+            gameState.traps.forEach(t => t.update());
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Input handling
+        const keys = {
+            left: false,
+            right: false,
+            up: false
+        };
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    keys.left = true;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    keys.right = true;
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                case ' ':
+                    keys.up = true;
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    keys.left = false;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    keys.right = false;
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                case ' ':
+                    keys.up = false;
+                    break;
+            }
+        });
+
+        function handleInput() {
+            if (!gameState.gameStarted) return;
+
+            if (keys.left) {
+                gameState.player.velocityX = -GAME_CONFIG.physics.moveSpeed;
+            } else if (keys.right) {
+                gameState.player.velocityX = GAME_CONFIG.physics.moveSpeed;
+            } else {
+                gameState.player.velocityX = 0;
+            }
+
+            if (keys.up && !gameState.player.isJumping) {
+                gameState.player.velocityY = GAME_CONFIG.physics.jumpForce;
+                gameState.player.isJumping = true;
+            }
+        }
+
+        function draw() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!gameState.gameStarted) {
+                return; // Don't draw game elements if game hasn't started
+            }
+            
+            // Draw gradient background
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, GAME_CONFIG.colors.background[0]);
+            gradient.addColorStop(1, GAME_CONFIG.colors.background[1]);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw game elements
+            gameState.platforms.forEach(p => p.draw());
+            gameState.traps.forEach(t => t.draw());
+            gameState.checkpoints.forEach(c => c.draw());
+            drawPlayer();
+            
+            // Draw level number and death counter
+            ctx.fillStyle = '#000';
+            ctx.font = '24px Arial';
+            ctx.fillText('Level: ' + gameState.currentLevel, 10, 30);
+            ctx.fillText('Deaths: ' + gameState.deaths, 10, 60);
+            
+            // Show completion message on level 10
+            if (gameState.currentLevel === 10) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, canvas.height / 2 - 100, canvas.width, 200);
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Thank you for playing my game!', canvas.width / 2, canvas.height / 2);
+                ctx.font = '24px Arial';
+                ctx.fillText('You\'ve conquered all the challenges!', canvas.width / 2, canvas.height / 2 + 50);
+                
+                ctx.textAlign = 'left'; // Reset text alignment
+            }
+        }
+    </script>
+</body>
+</html>
