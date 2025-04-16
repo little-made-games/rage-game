@@ -430,6 +430,165 @@
                         new Checkpoint(750, baseHeight - 630, false)
                     );
                     break;
+
+                case 6:
+                    // Level 6 - The Spiral
+                    // Create a spiral pattern of platforms
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i * Math.PI) / 4;
+                        const radius = 200 + i * 30;
+                        const x = 700 + Math.cos(angle) * radius;
+                        const y = baseHeight - 300 + Math.sin(angle) * radius;
+                        gameState.platforms.push(new Platform(x, y, 200, 20));
+                        
+                        // Add some fake platforms to confuse
+                        if (i % 2 === 0) {
+                            gameState.platforms.push(
+                                new Platform(x - 100, y - 50, 100, 20, 'fake')
+                            );
+                        }
+                    }
+                    
+                    // Add traps in a circular pattern
+                    for (let i = 0; i < 12; i++) {
+                        const angle = (i * Math.PI) / 6;
+                        const radius = 300;
+                        const x = 700 + Math.cos(angle) * radius;
+                        const y = baseHeight - 300 + Math.sin(angle) * radius;
+                        gameState.traps.push(new Trap(x, y, 30, 30));
+                    }
+                    
+                    gameState.checkpoints.push(new Checkpoint(700, baseHeight - 500));
+                    break;
+
+                case 7:
+                    // Level 7 - The Zigzag Tower
+                    for (let i = 0; i < 8; i++) {
+                        const x = i % 2 === 0 ? 300 : 900;
+                        gameState.platforms.push(
+                            new Platform(x, baseHeight - (i + 1) * 100, 250, 20)
+                        );
+                        
+                        // Add fake platforms between zigzags
+                        if (i < 7) {
+                            gameState.platforms.push(
+                                new Platform(600, baseHeight - (i + 1.5) * 100, 150, 20, 'fake')
+                            );
+                        }
+                        
+                        // Add traps on alternating sides
+                        for (let j = 0; j < 3; j++) {
+                            gameState.traps.push(
+                                new Trap(x + (i % 2 === 0 ? 300 + j * 100 : -100 - j * 100), 
+                                       baseHeight - (i + 1) * 100 + 30, 30, 30)
+                            );
+                        }
+                    }
+                    gameState.checkpoints.push(new Checkpoint(900, baseHeight - 800));
+                    break;
+
+                case 8:
+                    // Level 8 - The Grid Challenge
+                    // Create a grid of platforms with some gaps
+                    for (let row = 0; row < 5; row++) {
+                        for (let col = 0; col < 5; col++) {
+                            if ((row + col) % 2 === 0) {  // Checkerboard pattern
+                                gameState.platforms.push(
+                                    new Platform(200 + col * 250, 
+                                              baseHeight - (row + 1) * 120, 
+                                              200, 20)
+                                );
+                            } else {
+                                // Add fake platforms in between
+                                gameState.platforms.push(
+                                    new Platform(200 + col * 250, 
+                                              baseHeight - (row + 1) * 120, 
+                                              200, 20, 'fake')
+                                );
+                            }
+                        }
+                    }
+                    
+                    // Add traps in the gaps
+                    for (let i = 0; i < 12; i++) {
+                        gameState.traps.push(
+                            new Trap(300 + i * 100, baseHeight - 50, 30, 30),
+                            new Trap(250 + i * 100, baseHeight - 250, 30, 30),
+                            new Trap(300 + i * 100, baseHeight - 450, 30, 30)
+                        );
+                    }
+                    
+                    gameState.checkpoints.push(new Checkpoint(1100, baseHeight - 600));
+                    break;
+
+                case 9:
+                    // Level 9 - The Moving Wave
+                    // Create a wave pattern of platforms
+                    for (let i = 0; i < 12; i++) {
+                        const x = 200 + i * 150;
+                        const y = baseHeight - 200 + Math.sin(i * 0.5) * 100;
+                        gameState.platforms.push(new Platform(x, y, 120, 20));
+                        
+                        // Add fake platforms above and below the wave
+                        if (i % 2 === 0) {
+                            gameState.platforms.push(
+                                new Platform(x, y - 100, 100, 20, 'fake'),
+                                new Platform(x, y + 100, 100, 20, 'fake')
+                            );
+                        }
+                        
+                        // Add traps following the wave pattern
+                        gameState.traps.push(
+                            new Trap(x + 50, y - 50, 30, 30)
+                        );
+                    }
+                    
+                    gameState.checkpoints.push(new Checkpoint(1300, baseHeight - 300));
+                    break;
+
+                case 10:
+                    // Level 10 - The Final Challenge
+                    // Create a complex pattern combining all previous challenges
+                    
+                    // Central tower
+                    for (let i = 0; i < 6; i++) {
+                        gameState.platforms.push(
+                            new Platform(650, baseHeight - (i + 1) * 100, 300, 20)
+                        );
+                    }
+                    
+                    // Side platforms with fake ones
+                    for (let i = 0; i < 5; i++) {
+                        // Left side
+                        gameState.platforms.push(
+                            new Platform(300, baseHeight - (i + 1) * 150, 200, 20),
+                            new Platform(200, baseHeight - (i + 1.5) * 150, 150, 20, 'fake')
+                        );
+                        
+                        // Right side
+                        gameState.platforms.push(
+                            new Platform(1000, baseHeight - (i + 1) * 150, 200, 20),
+                            new Platform(1150, baseHeight - (i + 1.5) * 150, 150, 20, 'fake')
+                        );
+                    }
+                    
+                    // Add lots of traps
+                    for (let i = 0; i < 15; i++) {
+                        gameState.traps.push(
+                            new Trap(200 + i * 80, baseHeight - 50, 30, 30),
+                            new Trap(250 + i * 80, baseHeight - 250, 30, 30),
+                            new Trap(200 + i * 80, baseHeight - 450, 30, 30)
+                        );
+                    }
+                    
+                    // Final checkpoint at the top
+                    gameState.checkpoints.push(new Checkpoint(800, baseHeight - 650));
+                    
+                    // Victory message when reaching the final checkpoint
+                    gameState.checkpoints[0].onReach = () => {
+                        showDialogue("Congratulations! You've beaten all levels! You're a true master!");
+                    };
+                    break;
             }
         }
 
